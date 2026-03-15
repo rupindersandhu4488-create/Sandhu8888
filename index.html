@@ -1,26 +1,266 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>My IPTV</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-</head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sandhu TV</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    * { box-sizing: border-box; }
 
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0b1020;
+      color: white;
+    }
+
+    header {
+      padding: 18px;
+      background: #11182d;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid #24304f;
+    }
+
+    h1 {
+      margin: 0 0 12px 0;
+      font-size: 26px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    input, select {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #33446d;
+      background: #18233f;
+      color: white;
+      font-size: 15px;
+    }
+
+    input {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .player-wrap {
+      padding: 16px;
+    }
+
+    .player-box {
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #25314e;
+    }
+
+    video {
+      width: 100%;
+      max-height: 420px;
+      background: black;
+    }
+
+    .now-playing {
+      padding: 12px 14px;
+      background: #11182d;
+      border-top: 1px solid #25314e;
+      color: #c9d4f2;
+    }
+
+    .section-title {
+      padding: 0 16px;
+      margin: 8px 0 12px;
+      font-size: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 14px;
+      padding: 0 16px 24px;
+    }
+
+    .card {
+      background: #11182d;
+      border: 1px solid #24304f;
+      border-radius: 16px;
+      padding: 12px;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: #4d6bc7;
+    }
+
+    .logo {
+      width: 100%;
+      height: 90px;
+      object-fit: contain;
+      background: #0c1325;
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+
+    .channel-name {
+      font-size: 15px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .channel-group {
+      font-size: 12px;
+      color: #aeb9d8;
+    }
+
+    .empty {
+      padding: 20px 16px 30px;
+      color: #b7c3e3;
+    }
+  </style>
+</head>
 <body>
 
-<h2>My IPTV Player</h2>
+  <header>
+    <h1>Sandhu TV</h1>
+    <div class="controls">
+      <input id="searchInput" type="text" placeholder="Search channels..." />
+      <select id="groupFilter">
+        <option value="All">All Categories</option>
+      </select>
+    </div>
+  </header>
 
-<video id="video" controls width="800"></video>
+  <div class="player-wrap">
+    <div class="player-box">
+      <video id="video" controls playsinline></video>
+      <div class="now-playing" id="nowPlaying">Now Playing: None</div>
+    </div>
+  </div>
 
-<script>
-var video = document.getElementById('video');
-var videoSrc = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+  <h2 class="section-title">Channels</h2>
+  <div class="grid" id="channelGrid"></div>
+  <div class="empty" id="emptyState" style="display:none;">No matching channels found.</div>
 
-if(Hls.isSupported()) {
-  var hls = new Hls();
-  hls.loadSource(videoSrc);
-  hls.attachMedia(video);
-}
-</script>
+  <script>
+    const channels = [
+      {
+        name: "Test Stream",
+        url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+        group: "Demo",
+        logo: "https://dummyimage.com/300x180/1b2645/ffffff&text=Test+Stream"
+      },
+      {
+        name: "Big Buck Bunny",
+        url: "https://test-streams.mux.dev/bbb-360p.m3u8",
+        group: "Demo",
+        logo: "https://dummyimage.com/300x180/16213e/ffffff&text=Big+Buck+Bunny"
+      }
+    ];
 
+    const video = document.getElementById("video");
+    const grid = document.getElementById("channelGrid");
+    const searchInput = document.getElementById("searchInput");
+    const groupFilter = document.getElementById("groupFilter");
+    const nowPlaying = document.getElementById("nowPlaying");
+    const emptyState = document.getElementById("emptyState");
+
+    let hls;
+
+    function playChannel(channel) {
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = channel.url;
+      } else if (Hls.isSupported()) {
+        hls = new Hls();
+        hls.loadSource(channel.url);
+        hls.attachMedia(video);
+      } else {
+        alert("This browser does not support HLS playback.");
+        return;
+      }
+
+      nowPlaying.textContent = "Now Playing: " + channel.name;
+      video.play().catch(() => {});
+    }
+
+    function populateGroups() {
+      const groups = [...new Set(channels.map(c => c.group).filter(Boolean))].sort();
+      groups.forEach(group => {
+        const option = document.createElement("option");
+        option.value = group;
+        option.textContent = group;
+        groupFilter.appendChild(option);
+      });
+    }
+
+    function renderChannels() {
+      const search = searchInput.value.toLowerCase().trim();
+      const selectedGroup = groupFilter.value;
+
+      const filtered = channels.filter(channel => {
+        const matchesSearch =
+          channel.name.toLowerCase().includes(search) ||
+          (channel.group || "").toLowerCase().includes(search);
+
+        const matchesGroup =
+          selectedGroup === "All" || channel.group === selectedGroup;
+
+        return matchesSearch && matchesGroup;
+      });
+
+      grid.innerHTML = "";
+
+      if (filtered.length === 0) {
+        emptyState.style.display = "block";
+        return;
+      }
+
+      emptyState.style.display = "none";
+
+      filtered.forEach(channel => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.onclick = () => playChannel(channel);
+
+        const logo = document.createElement("img");
+        logo.className = "logo";
+        logo.src = channel.logo || "https://dummyimage.com/300x180/222/fff&text=Channel";
+        logo.alt = channel.name;
+
+        const name = document.createElement("div");
+        name.className = "channel-name";
+        name.textContent = channel.name;
+
+        const group = document.createElement("div");
+        group.className = "channel-group";
+        group.textContent = channel.group || "Other";
+
+        card.appendChild(logo);
+        card.appendChild(name);
+        card.appendChild(group);
+
+        grid.appendChild(card);
+      });
+    }
+
+    searchInput.addEventListener("input", renderChannels);
+    groupFilter.addEventListener("change", renderChannels);
+
+    populateGroups();
+    renderChannels();
+  </script>
 </body>
 </html>
